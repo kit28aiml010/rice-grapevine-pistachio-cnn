@@ -1,0 +1,117 @@
+"""
+Prepare agricultural datasets for YOLOv8 training.
+
+This script organizes the rice, pistachio, and grapevine leaves datasets
+into a format suitable for YOLOv8 training.
+"""
+import os
+import shutil
+from pathlib import Path
+from sklearn.model_selection import train_test_split
+import random
+
+# Base directories
+BASE_DIR = Path("C:\\Users\\User\\OneDrive\\Desktop\\pals kaggle\\train modul")
+OUTPUT_DIR = Path("data/agriculture")
+
+# Dataset paths
+RICE_DIR = BASE_DIR / "archive" / "Rice_Image_Dataset"
+PISTACHIO_TRAIN_DIR = BASE_DIR / "archive (1)" / "train"
+PISTACHIO_TEST_DIR = BASE_DIR / "archive (1)" / "test"
+GRAPEVINE_DIR = BASE_DIR / "archive (2)" / "Grapevine_Leaves_Image_Dataset"
+
+# Output structure
+DATASETS = {
+    "rice": {
+        "path": RICE_DIR,
+        "classes": ["Arborio", "Basmati", "Ipsala", "Jasmine", "Karacadag"],
+        "type": "classification"
+    },
+    "pistachio": {
+        "path": PISTACHIO_TRAIN_DIR,
+        "test_path": PISTACHIO_TEST_DIR,
+        "classes": ["Kirmizi_Pistachio", "Siirt_Pistachio"],
+        "type": "classification"
+    },
+    "grapevine": {
+        "path": GRAPEVINE_DIR,
+        "classes": ["Ak", "Ala_Idris", "Buzgulu", "Dimnit", "Nazli"],
+        "type": "classification"
+    }
+}
+
+def prepare_classification_dataset(dataset_name, dataset_info, output_dir, test_size=0.2, val_size=0.1, random_state=42):
+    """Prepare a classification dataset for YOLOv8 training."""
+    print(f"Preparing {dataset_name} dataset...")
+    
+    # Create output directories
+    train_dir = output_dir / dataset_name / "train"
+    val_dir = output_dir / dataset_name / "val"
+    test_dir = output_dir / dataset_name / "test"
+    
+    for split_dir in [train_dir, val_dir, test_dir]:
+        for class_name in dataset_info["classes"]:
+            (split_dir / class_name).mkdir(parents=True, exist_ok=True)
+    
+    # Process each class
+    for class_name in dataset_info["classes"]:
+        print(f"  Processing class: {class_name}")
+        
+        # Get source directory
+        if dataset_name == "rice":
+            src_dir = dataset_info["path"] / class_name
+        elif dataset_name == "pistachio":
+            src_dir = dataset_info["path"] / class_name.replace("_", " ")
+            test_src_dir = dataset_info["test_path"] / class_name.replace("_", " ")
+        else:  # grapevine
+            src_dir = dataset_info["path"] / class_name
+        
+        # Get all image files
+        image_files = []
+        for ext in ["*.jpg", "*.jpeg", "*.png"]:
+            if dataset_name == "pistachio":
+                # For pistachio, we have separate train and test dirs
+                train_files = list(src_dir.glob(ext))
+                test_files = list(test_src_dir.glob(ext))
+                image_files.extend(train_files + test_files)
+            else:
+                image_files.extend(list(src_dir.glob(ext)))
+        
+        # Split into train/val/test
+        train_files, test_files = train_test_split(
+            image_files, test_size=test_size, random_state=random_state
+        )
+        train_files, val_files = train_test_split(
+            train_files, test_size=val_size/(1-test_size), random_state=random_state
+        )
+        
+        # Copy files to destination
+        def copy_files(files, dest_dir):
+            for src_file in files:
+                dest_file = dest_dir / class_name / src_file.name
+                if not dest_file.exists():
+                    shutil.copy2(src_file, dest_file)
+        
+        copy_files(train_files, train_dir)
+        copy_files(val_files, val_dir)
+        copy_files(test_files, test_dir)
+        
+        print(f"    Train: {len(train_files)}, Val: {len(val_files)}, Test: {len(test_files)}")
+    
+    print(f"{dataset_name} dataset prepared successfully!\n")
+
+def main():
+    """Main function to prepare all datasets."""
+    # Create output directory
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Prepare each dataset
+    for dataset_name, dataset_info in DATASETS.items():
+        if dataset_info["type"] == "classification":
+            prepare_classification_dataset(dataset_name, dataset_info, OUTPUT_DIR)
+    
+    print("All datasets prepared successfully!")
+    print(f"Output directory: {OUTPUT_DIR.absolute()}")
+
+if __name__ == "__main__":
+    main()
